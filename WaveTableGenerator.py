@@ -133,7 +133,7 @@ def tmpl_main():
     # attackLen = len(attackSamples)
     # loopLen = len(loopSamples)
 
-    (sampleName,attackSamples,loopSamples,sampleWidth)=getFromSf2('STW PIANO f D4')
+    (sampleName,attackSamples,loopSamples,sampleWidth)=getFromSf2('Xylophone C5')
     sampleFreq = estimateSampleFreq(attackSamples+loopSamples, 32000)
     attackLen = len(attackSamples)
     loopLen = len(loopSamples)
