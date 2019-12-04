@@ -168,7 +168,7 @@ if __name__ == "__main__":
             description='The wavetable c style code generation.')
         parser.add_argument('--internalTemplate', type=str,
                             help='Using interal template by specifing type.')
-        parser.add_argument('--sampleName', type=str, default='Kalimba C5',
+        parser.add_argument('--sampleName', type=str, default='Celesta C5 Mini',
                             help='Wavetable sample name.')
         parser.add_argument('--template', nargs='+', type=str, default=[],
                             help='Template files.')
