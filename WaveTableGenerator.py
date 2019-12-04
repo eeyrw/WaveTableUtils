@@ -7,7 +7,7 @@ from sf2utils.sf2parse import Sf2File
 from io import StringIO
 from string import Template
 import struct
-
+import argparse
 
 
 def noteToFreq(note):
@@ -104,41 +104,33 @@ def formatFileByParam(templateFile, outputFile, param):
 
 
 def getFromSf2(sampleName):
-    with open('MusicBox.sf2', 'rb') as sf2_file:
+    with open('./soundfont/MusicBox.sf2', 'rb') as sf2_file:
         sf2 = Sf2File(sf2_file)
         for sample in sf2.samples:
-            if sample.name==sampleName:
-                if sample.sample_rate!=32000:
-                    raise RuntimeError('Unsupported sample rate')                    
-                if sample.sample_width==1:
-                    upackStr='<b'
-                elif sample.sample_width==2:
-                    upackStr='<h'
+            if sample.name == sampleName:
+                if sample.sample_rate != 32000:
+                    raise RuntimeError('Unsupported sample rate')
+                if sample.sample_width == 1:
+                    upackStr = '<b'
+                elif sample.sample_width == 2:
+                    upackStr = '<h'
                 else:
                     raise RuntimeError('Unsupported sample width')
-                samples=[ sampleValue[0] for sampleValue in struct.iter_unpack(upackStr, sample.raw_sample_data)]
-                attackSamples=samples[0:sample.start_loop]
-                loopSamples=samples[sample.start_loop:sample.end_loop]
-                return (sampleName,attackSamples,loopSamples,sample.sample_width)              
+                samples = [sampleValue[0] for sampleValue in struct.iter_unpack(
+                    upackStr, sample.raw_sample_data)]
+                attackSamples = samples[0:sample.start_loop]
+                loopSamples = samples[sample.start_loop:sample.end_loop]
+                return (sampleName, attackSamples, loopSamples, sample.sample_width)
 
-                
 
-
-def tmpl_main():
-    # sampleName = "Marimba_E5"
-    # sampleWidth = 1
-    # attackSamples = readWaveSamples("./%s_ATTACK.wav" % sampleName)
-    # loopSamples = readWaveSamples("./%s_LOOP.wav" % sampleName)
-    # sampleFreq = estimateSampleFreq(attackSamples, 32000)
-    # attackLen = len(attackSamples)
-    # loopLen = len(loopSamples)
-
-    (sampleName,attackSamples,loopSamples,sampleWidth)=getFromSf2('Xylophone C5')
+def tmpl_main(templateFiles, sampleName, outputDir):
+    (sampleName, attackSamples, loopSamples,
+     sampleWidth) = getFromSf2(sampleName)
     sampleFreq = estimateSampleFreq(attackSamples+loopSamples, 32000)
     attackLen = len(attackSamples)
     loopLen = len(loopSamples)
     totalLen = attackLen+loopLen
-    sampleWidth=1
+    sampleWidth = 1
     if sampleWidth == 1:
         sampleType = "int8_t"
         attackSamples = [int(sample/256) for sample in attackSamples]
@@ -164,9 +156,33 @@ def tmpl_main():
     paramDict['WaveTableAttackData'] = attackSamplesDataString
     paramDict['WaveTableLoopData'] = loopSamplesDataString
     paramDict['WaveTableIncrementData'] = incrementDataString
-    formatFileByParam('WaveTable.h.avr.template', 'WaveTable.h', paramDict)
-    formatFileByParam('WaveTable.c.avr.template', 'WaveTable.c', paramDict)
+
+    for templateFile in templateFiles:
+        formatFileByParam(templateFile, os.path.join(outputDir, os.path.basename(os.path.splitext(
+            templateFile)[0])), paramDict)
 
 
 if __name__ == "__main__":
-    tmpl_main()
+    try:
+        parser = argparse.ArgumentParser(
+            description='The wavetable c style code generation.')
+        parser.add_argument('--internalTemplate', type=str,
+                            help='Using interal template by specifing type.')
+        parser.add_argument('--sampleName', type=str, default='Kalimba C5',
+                            help='Wavetable sample name.')
+        parser.add_argument('--template', nargs='+', type=str, default=[],
+                            help='Template files.')
+        parser.add_argument('--outputDir', type=str, default='.',
+                            help='Output directory.')
+        args = parser.parse_args()
+        if args.internalTemplate != None:
+            templateFileList = []
+            for filePath in os.listdir(os.path.join('./template', args.internalTemplate)):
+                if os.path.splitext(filePath)[1] == '.template':
+                    templateFileList.append(os.path.join(
+                        './template', args.internalTemplate, filePath))
+        else:
+            templateFileList = args.template
+        tmpl_main(templateFileList, args.sampleName, args.outputDir)
+    except RuntimeError as identifier:
+        print('Meet error during code generation: '+str(identifier))
