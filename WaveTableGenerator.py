@@ -123,14 +123,13 @@ def getFromSf2(sampleName):
                 return (sampleName, attackSamples, loopSamples, sample.sample_width)
 
 
-def tmpl_main(templateFiles, sampleName, outputDir):
+def tmpl_main(templateFiles, sampleName, sampleWidth, outputDir):
     (sampleName, attackSamples, loopSamples,
      sampleWidth) = getFromSf2(sampleName)
     sampleFreq = estimateSampleFreq(attackSamples+loopSamples, 32000)
     attackLen = len(attackSamples)
     loopLen = len(loopSamples)
     totalLen = attackLen+loopLen
-    sampleWidth = 1
     if sampleWidth == 1:
         sampleType = "int8_t"
         attackSamples = [int(sample/256) for sample in attackSamples]
@@ -170,6 +169,8 @@ if __name__ == "__main__":
                             help='Using interal template by specifing type.')
         parser.add_argument('--sampleName', type=str, default='Kalimba C5',
                             help='Wavetable sample name.')
+        parser.add_argument('--sampleWidth', type=int, default=1,
+                            help='Wavetable sample wdith.')
         parser.add_argument('--template', nargs='+', type=str, default=[],
                             help='Template files.')
         parser.add_argument('--outputDir', type=str, default='.',
@@ -183,6 +184,7 @@ if __name__ == "__main__":
                         './template', args.internalTemplate, filePath))
         else:
             templateFileList = args.template
-        tmpl_main(templateFileList, args.sampleName, args.outputDir)
+        tmpl_main(templateFileList, args.sampleName,
+                  args.sampleWidth, args.outputDir)
     except RuntimeError as identifier:
         print('Meet error during code generation: '+str(identifier))
