@@ -8,6 +8,7 @@ from io import StringIO
 from string import Template
 import struct
 import argparse
+import pprint
 
 
 def noteToFreq(note):
@@ -106,6 +107,13 @@ def formatFileByParam(templateFile, outputFile, param):
 def getFromSf2(sampleName):
     with open('./soundfont/MusicBox.sf2', 'rb') as sf2_file:
         sf2 = Sf2File(sf2_file)
+        for instrument in sf2.instruments:
+            if instrument.name!='EOI':
+                pprint.pprint(vars(instrument))
+                for bag in instrument.bags:
+                    pprint.pprint(bag.__dir__())
+
+
         for sample in sf2.samples:
             if sample.name == sampleName:
                 if sample.sample_rate != 32000:
@@ -162,6 +170,8 @@ def tmpl_main(templateFiles, sampleName, sampleWidth, outputDir):
 
 
 if __name__ == "__main__":
+    getFromSf2('dfgdg')
+    exit(-1)
     try:
         parser = argparse.ArgumentParser(
             description='The wavetable c style code generation.')
