@@ -152,13 +152,6 @@ def getFromSf2(sf2FilePath, sampleName):
     with open(sf2FilePath, 'rb') as sf2_file:
         sf2 = Sf2File(sf2_file)
 
-        # We do not care instrument by now.
-        # for instrument in sf2.instruments:
-        #     if instrument.name != 'EOI':
-        #         pprint.pprint(vars(instrument))
-        #         for bag in instrument.bags:
-        #             pprint.pprint(bag.__dir__())
-
         for sample in sf2.samples:
             if sample.name == sampleName:
                 if sample.sample_width == 1:
@@ -172,6 +165,21 @@ def getFromSf2(sf2FilePath, sampleName):
                 attackSamples = samples[0:sample.start_loop]
                 loopSamples = samples[sample.start_loop:sample.end_loop]
                 return (sampleName, np.array(attackSamples),  np.array(loopSamples), sample.sample_width, sample.sample_rate, 1)
+
+
+def listSf2Info(sf2FilePath):
+    with open(sf2FilePath, 'rb') as sf2_file:
+        sf2 = Sf2File(sf2_file)
+
+        # We do not care instrument by now.
+        # for instrument in sf2.instruments:
+        #     if instrument.name != 'EOI':
+        #         pprint.pprint(vars(instrument))
+        #         for bag in instrument.bags:
+        #             pprint.pprint(bag.__dir__())
+
+        for sample in sf2.samples:
+            pprint.pprint(sample)
 
 
 def genCode(templateFiles, sampleName, sampleFreq, sampleRate, sampleWidth, attackSamples, loopSamples, outputDir):
@@ -215,6 +223,8 @@ if __name__ == "__main__":
                             help='Using interal template by specifing type.')
         parser.add_argument('--sf2', type=str, default='',
                             help='Sondfont2 file path.')
+        parser.add_argument('--listSf2', default=False, action='store_true',
+                            help='List infomation of sf2 file.')
         parser.add_argument('--sampleName', type=str, default='Celesta C5 Mini',
                             help='Wavetable sample name.')
         parser.add_argument('--outSampleRate', type=int, default=32000,
@@ -235,7 +245,7 @@ if __name__ == "__main__":
         else:
             templateFileList = args.extraTemplate
 
-        if args.sf2 != '':
+        if args.sf2 != '' and not args.listSf2:
             (sampleName, attackSamples, loopSamples,
              sampleWidth, sampleRate, sampleChannels) = getFromSf2(args.sf2, args.sampleName)
             attackSamples = samplePipelineProcess(
@@ -246,6 +256,8 @@ if __name__ == "__main__":
                 np.concatenate((attackSamples, loopSamples)), args.outSampleRate)
             genCode(templateFileList, sampleName, sampleFreq, args.outSampleRate,
                     args.outSampleWidth, attackSamples, loopSamples, args.outputDir)
+        elif args.sf2 != '' and args.listSf2:
+            listSf2Info(args.sf2)
         else:
             pass
 
