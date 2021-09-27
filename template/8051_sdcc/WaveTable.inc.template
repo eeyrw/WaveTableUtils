@@ -1,0 +1,10 @@
+; Sample name: $WaveTableName
+; Sample's base frequency: $WaveTableBaseFreq Hz
+; Sample's sample rate: $WaveTableSampleRate Hz
+
+WAVETABLE_LEN=$WaveTableLen
+WAVETABLE_ATTACK_LEN=$WaveTableAttackLen
+WAVETABLE_LOOP_LEN=$WaveTableLoopLen
+
+
+#endif
