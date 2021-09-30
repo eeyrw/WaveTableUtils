@@ -164,7 +164,8 @@ def getFromSf2(sf2FilePath, sampleName):
                     upackStr, sample.raw_sample_data)]
                 attackSamples = samples[0:sample.start_loop]
                 loopSamples = samples[sample.start_loop:sample.end_loop]
-                return (sampleName, np.array(attackSamples),  np.array(loopSamples), sample.sample_width, sample.sample_rate, 1)
+                sampleMidiNote = sample.original_pitch
+                return (sampleName, sampleMidiNote, np.array(attackSamples),  np.array(loopSamples), sample.sample_width, sample.sample_rate, 1)
 
 
 def listSf2Info(sf2FilePath):
@@ -246,15 +247,22 @@ if __name__ == "__main__":
             templateFileList = args.extraTemplate
 
         if args.sf2 != '' and not args.listSf2:
-            (sampleName, attackSamples, loopSamples,
+            (sampleName, sampleMidiNote, attackSamples, loopSamples,
              sampleWidth, sampleRate, sampleChannels) = getFromSf2(args.sf2, args.sampleName)
             attackSamples = samplePipelineProcess(
                 attackSamples, sampleChannels, sampleWidth, sampleRate, 1, args.outSampleWidth, args.outSampleRate)
             loopSamples = samplePipelineProcess(
                 loopSamples, sampleChannels, sampleWidth, sampleRate, 1, args.outSampleWidth, args.outSampleRate)
-            sampleFreq = estimateSampleFreq(
+            sampleFreqEst = estimateSampleFreq(
                 np.concatenate((attackSamples, loopSamples)), args.outSampleRate)
-            genCode(templateFileList, sampleName, sampleFreq, args.outSampleRate,
+
+            sampleFreqFromSf2 = noteToFreq(sampleMidiNote)
+
+            if abs(sampleFreqFromSf2-sampleFreqEst) > 10:
+                print('Big diff between sample freq:%.3f and sample est freq:%.3f' % (
+                    sampleFreqFromSf2, sampleFreqEst))
+
+            genCode(templateFileList, sampleName, sampleFreqEst, args.outSampleRate,
                     args.outSampleWidth, attackSamples, loopSamples, args.outputDir)
         elif args.sf2 != '' and args.listSf2:
             listSf2Info(args.sf2)
