@@ -8,6 +8,51 @@ from io import StringIO
 from string import Template
 import struct
 import argparse
+import pprint
+from scipy import signal
+
+
+def resample(inSamples, inSampleRate, inChannel, outSampleRate):
+    targetSampleLen = outSampleRate*len(inSamples)//inSampleRate
+    if inChannel == 1:
+        outSamples = signal.resample(inSamples, targetSampleLen)
+    elif inChannel == 2:
+        outSamples = signal.resample(inSamples, targetSampleLen, axis=1)
+    else:
+        raise RuntimeError(
+            'Can not resample samples with channel num =  %d!' % inChannel)
+    return outSamples
+
+
+def chanAdjust(inSamples, inChannel, outChannel):
+    if inChannel == outChannel:
+        return inSamples
+    elif inChannel == 2 and outChannel == 1:
+        return np.sum(inSamples, axis=0)//2
+    elif inChannel == 1 and outChannel == 2:
+        np.stack((inSamples, inSamples))
+    else:
+        raise RuntimeError(
+            'Can not convert channel %d to channel %d!' % (inChannel, outChannel))
+
+
+def widthAdjust(inSamples, inWidth, outWidth):
+    if inWidth == outWidth:
+        return inSamples
+    elif inWidth == 2 and outWidth == 1:
+        return inSamples//256
+    elif inWidth == 1 and outWidth == 2:
+        return inSamples*256
+    else:
+        raise RuntimeError(
+            'Can not convert width %d to width %d!' % (inWidth, outWidth))
+
+
+def samplePipelineProcess(inSamples, inChannel, inWidth, inSampleRate, outChannel, outWidth, outSampleRate):
+    midOut = resample(inSamples, inSampleRate, inChannel, outSampleRate)
+    midOut = chanAdjust(midOut, inChannel, outChannel)
+    midOut = widthAdjust(midOut, inWidth, outWidth)
+    return midOut
 
 
 def noteToFreq(note):
@@ -103,13 +148,12 @@ def formatFileByParam(templateFile, outputFile, param):
 # start_loop:57637
 
 
-def getFromSf2(sampleName):
-    with open('./soundfont/MusicBox.sf2', 'rb') as sf2_file:
+def getFromSf2(sf2FilePath, sampleName):
+    with open(sf2FilePath, 'rb') as sf2_file:
         sf2 = Sf2File(sf2_file)
+
         for sample in sf2.samples:
             if sample.name == sampleName:
-                if sample.sample_rate != 32000:
-                    raise RuntimeError('Unsupported sample rate')
                 if sample.sample_width == 1:
                     upackStr = '<b'
                 elif sample.sample_width == 2:
@@ -120,20 +164,31 @@ def getFromSf2(sampleName):
                     upackStr, sample.raw_sample_data)]
                 attackSamples = samples[0:sample.start_loop]
                 loopSamples = samples[sample.start_loop:sample.end_loop]
-                return (sampleName, attackSamples, loopSamples, sample.sample_width)
+                sampleMidiNote = sample.original_pitch
+                return (sampleName, sampleMidiNote, np.array(attackSamples),  np.array(loopSamples), sample.sample_width, sample.sample_rate, 1)
 
 
-def tmpl_main(templateFiles, sampleName, sampleWidth, outputDir):
-    (sampleName, attackSamples, loopSamples,
-     sampleWidth) = getFromSf2(sampleName)
-    sampleFreq = estimateSampleFreq(attackSamples+loopSamples, 32000)
+def listSf2Info(sf2FilePath):
+    with open(sf2FilePath, 'rb') as sf2_file:
+        sf2 = Sf2File(sf2_file)
+
+        # We do not care instrument by now.
+        # for instrument in sf2.instruments:
+        #     if instrument.name != 'EOI':
+        #         pprint.pprint(vars(instrument))
+        #         for bag in instrument.bags:
+        #             pprint.pprint(bag.__dir__())
+
+        for sample in sf2.samples:
+            pprint.pprint(sample)
+
+
+def genCode(templateFiles, sampleName, sampleFreq, sampleRate, sampleWidth, attackSamples, loopSamples, outputDir):
     attackLen = len(attackSamples)
     loopLen = len(loopSamples)
     totalLen = attackLen+loopLen
     if sampleWidth == 1:
         sampleType = "int8_t"
-        attackSamples = [int(sample/256) for sample in attackSamples]
-        loopSamples = [int(sample/256) for sample in loopSamples]
     elif sampleWidth == 2:
         sampleType = "int16_t"
     attackSamplesDataString = getCStyleSampleDataString(
@@ -146,7 +201,7 @@ def tmpl_main(templateFiles, sampleName, sampleWidth, outputDir):
     paramDict = {}
     paramDict['WaveTableName'] = sampleName
     paramDict['WaveTableBaseFreq'] = sampleFreq
-    paramDict['WaveTableSampleRate'] = 32000
+    paramDict['WaveTableSampleRate'] = sampleRate
     paramDict['WaveTableLen'] = totalLen
     paramDict['WaveTableAttackLen'] = attackLen
     paramDict['WaveTableLoopLen'] = loopLen
@@ -165,26 +220,54 @@ if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser(
             description='The wavetable c style code generation.')
-        parser.add_argument('--internalTemplate', type=str,
+        parser.add_argument('--template', type=str, default='avr_gcc',
                             help='Using interal template by specifing type.')
+        parser.add_argument('--sf2', type=str, default='',
+                            help='Sondfont2 file path.')
+        parser.add_argument('--listSf2', default=False, action='store_true',
+                            help='List infomation of sf2 file.')
         parser.add_argument('--sampleName', type=str, default='Celesta C5 Mini',
                             help='Wavetable sample name.')
-        parser.add_argument('--sampleWidth', type=int, default=1,
+        parser.add_argument('--outSampleRate', type=int, default=32000,
+                            help='Output wavetable sample rate.')
+        parser.add_argument('--outSampleWidth', type=int, default=1,
                             help='Wavetable sample wdith.')
-        parser.add_argument('--template', nargs='+', type=str, default=[],
-                            help='Template files.')
+        parser.add_argument('--extraTemplate', nargs='+', type=str, default=[],
+                            help='Using extra template files instead of self-contained template.')
         parser.add_argument('--outputDir', type=str, default='.',
                             help='Output directory.')
         args = parser.parse_args()
-        if args.internalTemplate != None:
+        if args.template != None:
             templateFileList = []
-            for filePath in os.listdir(os.path.join('./template', args.internalTemplate)):
+            for filePath in os.listdir(os.path.join('./template', args.template)):
                 if os.path.splitext(filePath)[1] == '.template':
                     templateFileList.append(os.path.join(
-                        './template', args.internalTemplate, filePath))
+                        './template', args.template, filePath))
         else:
-            templateFileList = args.template
-        tmpl_main(templateFileList, args.sampleName,
-                  args.sampleWidth, args.outputDir)
+            templateFileList = args.extraTemplate
+
+        if args.sf2 != '' and not args.listSf2:
+            (sampleName, sampleMidiNote, attackSamples, loopSamples,
+             sampleWidth, sampleRate, sampleChannels) = getFromSf2(args.sf2, args.sampleName)
+            attackSamples = samplePipelineProcess(
+                attackSamples, sampleChannels, sampleWidth, sampleRate, 1, args.outSampleWidth, args.outSampleRate)
+            loopSamples = samplePipelineProcess(
+                loopSamples, sampleChannels, sampleWidth, sampleRate, 1, args.outSampleWidth, args.outSampleRate)
+            sampleFreqEst = estimateSampleFreq(
+                np.concatenate((attackSamples, loopSamples)), args.outSampleRate)
+
+            sampleFreqFromSf2 = noteToFreq(sampleMidiNote)
+
+            if abs(sampleFreqFromSf2-sampleFreqEst) > 10:
+                print('Big diff between sample freq:%.3f and sample est freq:%.3f' % (
+                    sampleFreqFromSf2, sampleFreqEst))
+
+            genCode(templateFileList, sampleName, sampleFreqEst, args.outSampleRate,
+                    args.outSampleWidth, attackSamples, loopSamples, args.outputDir)
+        elif args.sf2 != '' and args.listSf2:
+            listSf2Info(args.sf2)
+        else:
+            pass
+
     except RuntimeError as identifier:
         print('Meet error during code generation: '+str(identifier))

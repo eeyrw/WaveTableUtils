@@ -1,0 +1,1 @@
+python .\WaveTableGenerator.py --sf2 .\soundfont\MusicBox.sf2 --template 8051_sdcc --outSampleRate 32000 --outSampleWidth 1 --sampleName "Square Wave C5" --outputDir C:\Users\yuan\Desktop\sdcc-8051-example\
