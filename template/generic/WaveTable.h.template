@@ -1,0 +1,19 @@
+#ifndef __WAVETABLE__
+#define __WAVETABLE__
+// Sample name: $WaveTableName
+// Sample's base frequency: $WaveTableBaseFreq Hz
+// Sample's sample rate: $WaveTableSampleRate Hz
+#define WAVETABLE_LEN $WaveTableLen
+#define WAVETABLE_ATTACK_LEN $WaveTableAttackLen
+#define WAVETABLE_LOOP_LEN $WaveTableLoopLen
+
+#ifndef __ASSEMBLER__
+#include <stdint.h>
+extern const $WaveTableSampleType WaveTable[WAVETABLE_LEN];
+extern const $WaveTableIncrementType WaveTable_Increment[];
+#else
+.extern	WaveTable
+.extern WaveTable_Increment
+#endif
+
+#endif
