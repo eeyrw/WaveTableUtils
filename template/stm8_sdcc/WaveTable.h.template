@@ -9,6 +9,7 @@
 extern const uint16_t WAVETABLE_LEN;
 extern const uint16_t WAVETABLE_ATTACK_LEN;
 extern const uint16_t WAVETABLE_LOOP_LEN;
+extern constuint16_t WAVETABLE_ACTUAL_LEN;
 
 extern const $WaveTableSampleType WaveTable[];
 extern const $WaveTableIncrementType WaveTable_Increment[];

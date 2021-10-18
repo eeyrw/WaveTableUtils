@@ -1,7 +1,7 @@
 import wave
 import struct
 import os
-from math import log2, pow
+from math import e, log2, pow
 import numpy as np
 from sf2utils.sf2parse import Sf2File
 from io import StringIO
@@ -183,10 +183,15 @@ def listSf2Info(sf2FilePath):
             pprint.pprint(sample)
 
 
-def genCode(templateFiles, sampleName, sampleFreq, sampleRate, sampleWidth, attackSamples, loopSamples, outputDir):
+def genCode(templateFiles, sampleName, sampleFreq, sampleRate, sampleWidth, attackSamples, loopSamples, outputDir, padding):
     attackLen = len(attackSamples)
     loopLen = len(loopSamples)
     totalLen = attackLen+loopLen
+    if padding:
+        paddingLen = 1
+        loopSamples = np.append(loopSamples, loopSamples[0])
+    else:
+        paddingLen = 0
     if sampleWidth == 1:
         sampleType = "int8_t"
     elif sampleWidth == 2:
@@ -203,6 +208,7 @@ def genCode(templateFiles, sampleName, sampleFreq, sampleRate, sampleWidth, atta
     paramDict['WaveTableBaseFreq'] = sampleFreq
     paramDict['WaveTableSampleRate'] = sampleRate
     paramDict['WaveTableLen'] = totalLen
+    paramDict['WaveTableActualLen'] = totalLen+paddingLen
     paramDict['WaveTableAttackLen'] = attackLen
     paramDict['WaveTableLoopLen'] = loopLen
     paramDict['WaveTableSampleType'] = sampleType
@@ -220,7 +226,7 @@ if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser(
             description='The wavetable c style code generation.')
-        parser.add_argument('--template', type=str, default='avr_gcc',
+        parser.add_argument('--template', type=str, default='generic',
                             help='Using interal template by specifing type.')
         parser.add_argument('--sf2', type=str, default='',
                             help='Sondfont2 file path.')
@@ -232,6 +238,8 @@ if __name__ == "__main__":
                             help='Output wavetable sample rate.')
         parser.add_argument('--outSampleWidth', type=int, default=1,
                             help='Wavetable sample wdith.')
+        parser.add_argument('--padding', default=False, action='store_true',
+                            help='Padding one sample at the end of table in aspect of convenience of interpolation.')
         parser.add_argument('--extraTemplate', nargs='+', type=str, default=[],
                             help='Using extra template files instead of self-contained template.')
         parser.add_argument('--outputDir', type=str, default='.',
@@ -263,7 +271,7 @@ if __name__ == "__main__":
                     sampleFreqFromSf2, sampleFreqEst))
 
             genCode(templateFileList, sampleName, sampleFreqEst, args.outSampleRate,
-                    args.outSampleWidth, attackSamples, loopSamples, args.outputDir)
+                    args.outSampleWidth, attackSamples, loopSamples, args.outputDir, args.padding)
         elif args.sf2 != '' and args.listSf2:
             listSf2Info(args.sf2)
         else:

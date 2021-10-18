@@ -5,3 +5,4 @@
 WAVETABLE_LEN=$WaveTableLen
 WAVETABLE_ATTACK_LEN=$WaveTableAttackLen
 WAVETABLE_LOOP_LEN=$WaveTableLoopLen
+WAVETABLE_ACTUAL_LEN=$WaveTableActualLen

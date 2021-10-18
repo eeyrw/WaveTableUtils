@@ -4,7 +4,7 @@
 // Sample name: $WaveTableName
 // Sample's base frequency: $WaveTableBaseFreq Hz
 // Sample's sample rate: $WaveTableSampleRate Hz
-const $WaveTableSampleType WaveTable[WAVETABLE_LEN] PROGMEM ={
+const $WaveTableSampleType WaveTable[WAVETABLE_ACTUAL_LEN] PROGMEM ={
 $WaveTableAttackData
 $WaveTableLoopData
 };

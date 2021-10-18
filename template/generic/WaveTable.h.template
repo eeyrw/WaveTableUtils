@@ -6,10 +6,11 @@
 #define WAVETABLE_LEN $WaveTableLen
 #define WAVETABLE_ATTACK_LEN $WaveTableAttackLen
 #define WAVETABLE_LOOP_LEN $WaveTableLoopLen
+#define WAVETABLE_ACTUAL_LEN $WaveTableActualLen
 
 #ifndef __ASSEMBLER__
 #include <stdint.h>
-extern const $WaveTableSampleType WaveTable[WAVETABLE_LEN];
+extern const $WaveTableSampleType WaveTable[WAVETABLE_ACTUAL_LEN];
 extern const $WaveTableIncrementType WaveTable_Increment[];
 #else
 .extern	WaveTable

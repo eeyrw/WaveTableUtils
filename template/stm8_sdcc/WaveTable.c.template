@@ -8,8 +8,8 @@
 const uint16_t WAVETABLE_LEN = $WaveTableLen;
 const uint16_t WAVETABLE_ATTACK_LEN = $WaveTableAttackLen;
 const uint16_t WAVETABLE_LOOP_LEN = $WaveTableLoopLen;
-
-const $WaveTableSampleType WaveTable[$WaveTableLen] ={
+const uint16_t WAVETABLE_ACTUAL_LEN = $WaveTableActualLen
+const $WaveTableSampleType WaveTable[$WaveTableActualLen] ={
 $WaveTableAttackData
 $WaveTableLoopData
 };

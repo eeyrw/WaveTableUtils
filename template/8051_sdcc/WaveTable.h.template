@@ -6,9 +6,10 @@
 #define WAVETABLE_LEN $WaveTableLen
 #define WAVETABLE_ATTACK_LEN $WaveTableAttackLen
 #define WAVETABLE_LOOP_LEN $WaveTableLoopLen
+#define WAVETABLE_ACTUAL_LEN $WaveTableActualLen
 
 #include <stdint.h>
-extern __code $WaveTableSampleType WaveTable[WAVETABLE_LEN];
+extern __code $WaveTableSampleType WaveTable[WAVETABLE_ACTUAL_LEN];
 extern __code $WaveTableIncrementType WaveTable_Increment[];
 
 #endif
