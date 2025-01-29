@@ -1,0 +1,23 @@
+# Sample name: $WaveTableName
+# Sample's base frequency: $WaveTableBaseFreq Hz
+# Sample's sample rate: $WaveTableSampleRate Hz
+
+WAVETABLE_LEN = $WaveTableLen
+WAVETABLE_ATTACK_LEN = $WaveTableAttackLen
+WAVETABLE_LOOP_LEN = $WaveTableLoopLen
+WAVETABLE_ACTUAL_LEN = $WaveTableActualLen
+
+WaveTableSampleType = "$WaveTableSampleType"
+WaveTableIncrementType = "$WaveTableIncrementType"
+
+WaveTable = [
+# Attack Samples:
+$WaveTableAttackData
+# Loop Samples:
+$WaveTableLoopData
+]
+
+WaveTable_Increment = [
+# Increment:
+$WaveTableIncrementData
+]

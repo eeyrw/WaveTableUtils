@@ -109,10 +109,9 @@ def estimateSampleFreq(samples, sampleRate):
     return estimateFreq
 
 
-def getCStyleSampleDataString(sampleArray, colWidth, dataDescription=''):
+def getCStyleSampleDataString(sampleArray, colWidth):
     file_str = StringIO()
     newLineCounter = 0
-    file_str.write(dataDescription+'\n')
     for sample in sampleArray:
         file_str.write("%6d," % sample)
         if newLineCounter > colWidth:
@@ -197,11 +196,11 @@ def genCode(templateFiles, sampleName, sampleFreq, sampleRate, sampleWidth, atta
     elif sampleWidth == 2:
         sampleType = "int16_t"
     attackSamplesDataString = getCStyleSampleDataString(
-        attackSamples, 8, dataDescription='// Attack Samples:')
+        attackSamples, 8)
     loopSamplesDataString = getCStyleSampleDataString(
-        loopSamples, 8, dataDescription='// Loop Samples:')
+        loopSamples, 8)
     incrementDataString = getCStyleSampleDataString([calcIncrement(sampleFreq, noteToFreq(
-        i))*255 for i in range(0, 128)], 8, dataDescription='// Increment:')
+        i))*255 for i in range(0, 128)], 8)
     print("Estimated base frequency:%f Hz" % sampleFreq)
     paramDict = {}
     paramDict['WaveTableName'] = sampleName
