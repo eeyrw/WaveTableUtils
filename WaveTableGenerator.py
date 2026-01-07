@@ -109,6 +109,59 @@ def estimateSampleFreq(samples, sampleRate):
     return estimateFreq
 
 
+def bandlimit_by_lowest_note(
+    samples,
+    sample_rate,
+    base_freq,
+    lowest_target_freq,
+    transition_ratio=0.15
+):
+    """
+    FFT band-limit samples so that when transposed down to lowest_target_freq,
+    no aliasing occurs.
+
+    samples               : 1D numpy array
+    sample_rate           : Hz
+    base_freq             : original sample fundamental frequency (Hz)
+    lowest_target_freq    : lowest playback frequency (Hz)
+    transition_ratio      : soft roll-off width
+    """
+
+    samples = samples.astype(np.float32)
+
+    N = len(samples)
+    spectrum = np.fft.rfft(samples)
+    freqs = np.fft.rfftfreq(N, 1.0 / sample_rate)
+
+    nyquist = sample_rate * 0.5
+    f_max = nyquist * (lowest_target_freq / base_freq)
+
+    f_start = f_max * (1.0 - transition_ratio)
+    f_stop  = f_max
+
+    window = np.ones_like(freqs)
+
+    for i, f in enumerate(freqs):
+        if f <= f_start:
+            window[i] = 1.0
+        elif f >= f_stop:
+            window[i] = 0.0
+        else:
+            x = (f - f_start) / (f_stop - f_start)
+            window[i] = np.cos(x * np.pi * 0.5) ** 2
+
+    spectrum *= window
+
+    out = np.fft.irfft(spectrum, n=N)
+
+    # normalize back to original range
+    peak = np.max(np.abs(out))
+    if peak > 0:
+        out *= np.max(np.abs(samples)) / peak
+
+    return out.astype(samples.dtype)
+
+
 def getCStyleSampleDataString(sampleArray, colWidth):
     file_str = StringIO()
     newLineCounter = 0
@@ -237,6 +290,8 @@ if __name__ == "__main__":
                             help='Output wavetable sample rate.')
         parser.add_argument('--outSampleWidth', type=int, default=1,
                             help='Wavetable sample wdith.')
+        parser.add_argument('--lowestNote', type=int, default=36,
+                    help='Lowest MIDI note to be played (for FFT band-limit).')
         parser.add_argument('--padding', default=False, action='store_true',
                             help='Padding one sample at the end of table in aspect of convenience of interpolation.')
         parser.add_argument('--extraTemplate', nargs='+', type=str, default=[],
@@ -262,6 +317,24 @@ if __name__ == "__main__":
                 loopSamples, sampleChannels, sampleWidth, sampleRate, 1, args.outSampleWidth, args.outSampleRate)
             sampleFreqEst = estimateSampleFreq(
                 np.concatenate((attackSamples, loopSamples)), args.outSampleRate)
+
+            lowestFreq = noteToFreq(args.lowestNote)
+
+            print("Applying FFT band-limit for lowest freq: %.2f Hz" % lowestFreq)
+
+            attackSamples = bandlimit_by_lowest_note(
+                attackSamples,
+                args.outSampleRate,
+                sampleFreqEst,
+                lowestFreq
+            )
+
+            loopSamples = bandlimit_by_lowest_note(
+                loopSamples,
+                args.outSampleRate,
+                sampleFreqEst,
+                lowestFreq
+            )
 
             sampleFreqFromSf2 = noteToFreq(sampleMidiNote)
 
