@@ -411,19 +411,18 @@ if __name__ == "__main__":
             attackOrig = attackSamples.copy()
             loopOrig   = loopSamples.copy()
 
-            attackSamples = bandlimit_by_lowest_note(
-                attackSamples,
+            np.concatenate((attackSamples, loopSamples))
+
+            samples = bandlimit_by_lowest_note(
+                np.concatenate((attackSamples, loopSamples)),
                 args.outSampleRate,
                 sampleFreqEst,
                 lowestFreq
             )
 
-            loopSamples = bandlimit_by_lowest_note(
-                loopSamples,
-                args.outSampleRate,
-                sampleFreqEst,
-                lowestFreq
-            )
+            attackSamples = samples[0:len(attackSamples)]
+            loopSamples   = samples[len(attackSamples):]
+
 
             pdf = None
             if args.spectrumPdf:
@@ -433,45 +432,19 @@ if __name__ == "__main__":
                     f_max = nyquist * (lowestFreq / sampleFreqEst)
                 plot_spectrum_to_pdf(
                     pdf,
-                    loopOrig,
-                    loopSamples,
+                    np.concatenate((attackOrig, loopOrig)),
+                    samples,
                     args.outSampleRate,
-                    title=f"{sampleName} (Loop) Spectrum",
+                    title=f"{sampleName} (Attack + Loop) Spectrum",
                     f_max=f_max
                 )
 
-                plot_spectrum_to_pdf(
-                    pdf,
-                    attackOrig,
-                    attackSamples,
-                    args.outSampleRate,
-                    title=f"{sampleName} (Attack) Spectrum",
-                    f_max=f_max
-                )
-
-                # 时域
-                plot_time_domain_to_pdf(
-                    pdf,
-                    loopOrig,
-                    loopSamples,
-                    args.outSampleRate,
-                    title=f"{sampleName} (Loop) Time Domain",
-                    time_ms=100.0
-                )
-
-                plot_time_domain_to_pdf(
-                    pdf,
-                    attackOrig,
-                    attackSamples,
-                    args.outSampleRate,
-                    title=f"{sampleName} (Attack) Time Domain",
-                    time_ms=100.0
-                )
+               
 
                 plot_time_domain_to_pdf(
                     pdf,
                     np.concatenate((attackOrig, loopOrig)),
-                    np.concatenate((attackSamples, loopSamples)),
+                    samples,
                     args.outSampleRate,
                     title=f"{sampleName} (Attack + Loop) Time Domain",
                     time_ms=1000.0
