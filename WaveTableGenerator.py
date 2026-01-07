@@ -10,7 +10,8 @@ import struct
 import argparse
 import pprint
 from scipy import signal
-
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 def resample(inSamples, inSampleRate, inChannel, outSampleRate):
     targetSampleLen = outSampleRate*len(inSamples)//inSampleRate
@@ -161,6 +162,89 @@ def bandlimit_by_lowest_note(
 
     return out.astype(samples.dtype)
 
+def plot_spectrum_to_pdf(
+    pdf,
+    original,
+    processed,
+    sample_rate,
+    title,
+    f_max=None
+):
+    original = original.astype(np.float32)
+    processed = processed.astype(np.float32)
+
+    N = min(len(original), len(processed))
+    window = np.blackman(N)
+
+    spec_orig = np.fft.rfft(original[:N] * window)
+    spec_proc = np.fft.rfft(processed[:N] * window)
+
+    freqs = np.fft.rfftfreq(N, 1.0 / sample_rate)
+
+    mag_orig = 20 * np.log10(np.abs(spec_orig) + 1e-12)
+    mag_proc = 20 * np.log10(np.abs(spec_proc) + 1e-12)
+
+    fig, ax = plt.subplots(figsize=(11, 6))
+
+    ax.plot(freqs, mag_orig, label="Original", alpha=0.6)
+    ax.plot(freqs, mag_proc, label="Band-limited", alpha=0.85)
+
+    ax.set_xlabel("Frequency (Hz)")
+    ax.set_ylabel("Magnitude (dB)")
+    ax.set_title(title)
+    ax.grid(True)
+    ax.legend()
+
+    if f_max is not None:
+        ax.axvline(f_max, color='r', linestyle='--',
+                   label="f_max (lowest note)")
+        ax.legend()
+
+        ax.set_xlim(0, f_max * 1.5)
+    else:
+        ax.set_xlim(0, sample_rate / 2)
+
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+def plot_time_domain_to_pdf(
+    pdf,
+    original,
+    processed,
+    sample_rate,
+    title,
+    time_ms=10.0
+):
+    """
+    Plot time-domain waveform comparison (original vs processed)
+    into PDF.
+    """
+
+    original = original.astype(np.float32)
+    processed = processed.astype(np.float32)
+
+    max_samples = int(sample_rate * time_ms / 1000.0)
+    max_samples = min(max_samples, len(original), len(processed))
+
+    t = np.arange(max_samples) / sample_rate * 1000.0  # ms
+
+    fig, ax = plt.subplots(figsize=(11, 4))
+
+    ax.plot(t, original[:max_samples],
+            label="Original", alpha=0.6)
+    ax.plot(t, processed[:max_samples],
+            label="Band-limited", alpha=0.85)
+
+    ax.set_xlabel("Time (ms)")
+    ax.set_ylabel("Amplitude")
+    ax.set_title(f"{title} (First {time_ms:.1f} ms)")
+    ax.grid(True)
+    ax.legend()
+
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
 
 def getCStyleSampleDataString(sampleArray, colWidth):
     file_str = StringIO()
@@ -292,6 +376,8 @@ if __name__ == "__main__":
                             help='Wavetable sample wdith.')
         parser.add_argument('--lowestNote', type=int, default=36,
                     help='Lowest MIDI note to be played (for FFT band-limit).')
+        parser.add_argument('--spectrumPdf', type=str, default='',
+                    help='Output spectrum comparison chart to PDF file.')
         parser.add_argument('--padding', default=False, action='store_true',
                             help='Padding one sample at the end of table in aspect of convenience of interpolation.')
         parser.add_argument('--extraTemplate', nargs='+', type=str, default=[],
@@ -322,6 +408,9 @@ if __name__ == "__main__":
 
             print("Applying FFT band-limit for lowest freq: %.2f Hz" % lowestFreq)
 
+            attackOrig = attackSamples.copy()
+            loopOrig   = loopSamples.copy()
+
             attackSamples = bandlimit_by_lowest_note(
                 attackSamples,
                 args.outSampleRate,
@@ -336,6 +425,49 @@ if __name__ == "__main__":
                 lowestFreq
             )
 
+            pdf = None
+            if args.spectrumPdf:
+                pdf = PdfPages(args.spectrumPdf)
+                if pdf is not None:
+                    nyquist = args.outSampleRate * 0.5
+                    f_max = nyquist * (lowestFreq / sampleFreqEst)
+                plot_spectrum_to_pdf(
+                    pdf,
+                    loopOrig,
+                    loopSamples,
+                    args.outSampleRate,
+                    title=f"{sampleName} (Loop) Spectrum",
+                    f_max=f_max
+                )
+
+                plot_spectrum_to_pdf(
+                    pdf,
+                    attackOrig,
+                    attackSamples,
+                    args.outSampleRate,
+                    title=f"{sampleName} (Attack) Spectrum",
+                    f_max=f_max
+                )
+
+                # 时域
+                plot_time_domain_to_pdf(
+                    pdf,
+                    loopOrig,
+                    loopSamples,
+                    args.outSampleRate,
+                    title=f"{sampleName} (Loop) Time Domain",
+                    time_ms=100.0
+                )
+
+                plot_time_domain_to_pdf(
+                    pdf,
+                    attackOrig,
+                    attackSamples,
+                    args.outSampleRate,
+                    title=f"{sampleName} (Attack) Time Domain",
+                    time_ms=100.0
+                )
+
             sampleFreqFromSf2 = noteToFreq(sampleMidiNote)
 
             if abs(sampleFreqFromSf2-sampleFreqEst) > 10:
@@ -348,6 +480,9 @@ if __name__ == "__main__":
             listSf2Info(args.sf2)
         else:
             pass
+        if pdf is not None:
+            pdf.close()
+            print("Spectrum PDF saved to:", args.spectrumPdf)
 
     except RuntimeError as identifier:
         print('Meet error during code generation: '+str(identifier))
