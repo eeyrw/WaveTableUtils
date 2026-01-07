@@ -468,6 +468,16 @@ if __name__ == "__main__":
                     time_ms=100.0
                 )
 
+                plot_time_domain_to_pdf(
+                    pdf,
+                    np.concatenate((attackOrig, loopOrig)),
+                    np.concatenate((attackSamples, loopSamples)),
+                    args.outSampleRate,
+                    title=f"{sampleName} (Attack + Loop) Time Domain",
+                    time_ms=1000.0
+                )
+
+
             sampleFreqFromSf2 = noteToFreq(sampleMidiNote)
 
             if abs(sampleFreqFromSf2-sampleFreqEst) > 10:
