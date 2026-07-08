@@ -1,0 +1,13 @@
+[project]
+name = "wavetable-utils"
+version = "1.0.0"
+description = "Extract wavetable samples from SoundFont2 (.sf2) and generate embedded C / Python code"
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "sf2utils",
+]

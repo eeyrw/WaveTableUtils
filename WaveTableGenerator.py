@@ -1,12 +1,10 @@
 import wave
 import struct
 import os
-from math import e, log2, pow
 import numpy as np
 from sf2utils.sf2parse import Sf2File
 from io import StringIO
 from string import Template
-import struct
 import argparse
 import pprint
 from scipy import signal
@@ -162,6 +160,126 @@ def bandlimit_by_lowest_note(
 
     return out.astype(samples.dtype)
 
+
+def auto_fix_loop_point(
+    attack,
+    loop,
+    search_window=64,
+    match_len=8,
+    slope_weight=0.5
+):
+    """
+    Automatically adjust loop start point to minimize discontinuity
+    after FFT band-limiting.
+
+    attack        : attack samples (1D np.array)
+    loop          : loop samples (1D np.array)
+    search_window : ± samples to search around original loop start
+    match_len     : number of samples to compare
+    slope_weight  : weight for first-derivative continuity
+    """
+
+    full = np.concatenate((attack, loop))
+    attack_len = len(attack)
+    loop_len = len(loop)
+
+    best_err = float("inf")
+    best_i = attack_len
+
+    start = max(match_len + 1, attack_len - search_window)
+    end   = min(len(full) - loop_len - match_len - 1,
+                attack_len + search_window)
+
+    for i in range(start, end):
+        err = 0.0
+        for n in range(match_len):
+            a0 = full[i + n]
+            b0 = full[i + loop_len + n]
+
+            a1 = full[i + n] - full[i + n - 1]
+            b1 = full[i + loop_len + n] - full[i + loop_len + n - 1]
+
+            err += (a0 - b0) ** 2
+            err += slope_weight * (a1 - b1) ** 2
+
+        if err < best_err:
+            best_err = err
+            best_i = i
+
+    new_attack = full[:best_i]
+    new_loop   = full[best_i:best_i + loop_len]
+
+    print(f"[Loop Fix] Loop start adjusted by {best_i - attack_len} samples")
+
+    return new_attack.astype(attack.dtype), new_loop.astype(loop.dtype)
+
+
+def compute_loop_error_curve(
+    attack,
+    loop,
+    search_window=64,
+    match_len=8,
+    slope_weight=0.5
+):
+    """
+    Compute loop error curve around original loop point.
+    Returns offsets and corresponding error values.
+    """
+
+    full = np.concatenate((attack, loop))
+    attack_len = len(attack)
+    loop_len = len(loop)
+
+    offsets = []
+    errors = []
+
+    start = max(match_len + 1, attack_len - search_window)
+    end   = min(len(full) - loop_len - match_len - 1,
+                attack_len + search_window)
+
+    for i in range(start, end):
+        err = 0.0
+        for n in range(match_len):
+            a0 = full[i + n]
+            b0 = full[i + loop_len + n]
+
+            a1 = full[i + n] - full[i + n - 1]
+            b1 = full[i + loop_len + n] - full[i + loop_len + n - 1]
+
+            err += (a0 - b0) ** 2
+            err += slope_weight * (a1 - b1) ** 2
+
+        offsets.append(i - attack_len)
+        errors.append(err)
+
+    return np.array(offsets), np.array(errors)
+
+def apply_gain_db(samples, gain_db, sample_width):
+    """
+    Apply gain in dB to integer samples with clipping.
+    samples      : np.array
+    gain_db      : float (e.g. -6.0)
+    sample_width : 1 or 2 (bytes)
+    """
+    if gain_db == 0.0:
+        return samples
+
+    gain = pow(10.0, gain_db / 20.0)
+
+    samples_f = samples.astype(np.float32) * gain
+
+    if sample_width == 1:
+        min_v, max_v = -128, 127
+    elif sample_width == 2:
+        min_v, max_v = -32768, 32767
+    else:
+        raise RuntimeError("Unsupported sample width")
+
+    samples_f = np.clip(samples_f, min_v, max_v)
+
+    return samples_f.astype(samples.dtype)
+
+
 def plot_spectrum_to_pdf(
     pdf,
     original,
@@ -246,6 +364,31 @@ def plot_time_domain_to_pdf(
     pdf.savefig(fig)
     plt.close(fig)
 
+def plot_loop_error_curve_to_pdf(
+    pdf,
+    offsets,
+    errors,
+    best_offset,
+    title
+):
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    ax.plot(offsets, errors, label="Loop Error", linewidth=1.5)
+    ax.axvline(0, color='gray', linestyle='--', label="Original Loop")
+    ax.axvline(best_offset, color='r', linestyle='--',
+               label=f"Fixed Loop ({best_offset:+d} samples)")
+
+    ax.set_xlabel("Loop Start Offset (samples)")
+    ax.set_ylabel("Error (value + slope)")
+    ax.set_title(title)
+    ax.grid(True)
+    ax.legend()
+
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
 def getCStyleSampleDataString(sampleArray, colWidth):
     file_str = StringIO()
     newLineCounter = 0
@@ -265,24 +408,6 @@ def formatFileByParam(templateFile, outputFile, param):
         s = Template(tmplString)
         with open(outputFile, 'w') as outFile:
             outFile.write(s.safe_substitute(param))
-
-# is_left:0
-# is_mono:1
-# loop_duration:322
-# name:'Music Box B4'
-# original_pitch:83
-# pitch_correction:0
-# raw_sample_data:b'\xf2\xff\x05\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x06\x00\xf1\xff\x07\x00\xf3\xff\x08\x00\xf4\xff\x0b\x00\xf5\xff\r\x00\xf8\xff\x10\x00\xfd\xff\x15\x00\x00\x00\x1a\x00\x03\x00\x1a\x00\x07\x00\x1f\x00\x0e\x00#\x00\xeb\xff:\x00}\x00\n\x01\x10\x02w\x03\xad\x04\xfc\x06\xcf\x07\xb7\t%\x0c\x96\rM\x0f4\x12\xd6\x12\xb9\x14v\x16\x1d\x18U\x1a\xbb\x19\xa6\x1b\xf6\x185\x17\xe8\x18\xce\x15\xd6\x123\x11\x00\x10h\x0f\x8b\x0f9\x0e!\x0e\x0e\x0b\xb6\x07\x10\xffh\xf81\xf7l\xf1\xf5\xeb{\xe7a\xe2\xfa\xdd\xb0\xda\x97\xd8\x1b\xd8s\xdb\x19\xdc(\xd9n\xd7\x18\xd7!\xd8\xc9\xd6\xf5\xd1o\xcb\xbb\xc7\xf3\xca\xfc\xcf\xb1\xce\xbb\xd2(\xdc\xfd\xe5;\xf30\xf5@\xfd\x8c\x02\x0c\t\xd9\x0f\x81\x0b\x18\x0e\xb5\x0f\xf0\x12\x93\x15\xfa\x12\xec\x12?\x17F\x1d:#\x88$\xed\'Y346\xab?\xbe;\xd77\xe971-S+\x08\x1do\x14\xe4\x0f$\tL\tz\x07f\x07\xde\x0c]\x11\xd9\x12\xd5\x14z\x11\x99\x12L\x08\n\xfeY\xf4V\xe5\'\xe1\xa7\xd5>\xd0\xe6\xcc\xab\xcb\xe5\xd1\x04\xd2\x...
-# sample_link:None
-# sample_rate:32000
-# sample_type:1
-# sample_width:2
-# sf2parser:<sf2utils.sf2parse.Sf2File object at 0x000001EA66321128>
-# sm24_offset:None
-# smpl_offset:214
-# start:0
-# start_loop:57637
-
 
 def getFromSf2(sf2FilePath, sampleName):
     with open(sf2FilePath, 'rb') as sf2_file:
@@ -376,6 +501,8 @@ if __name__ == "__main__":
                             help='Wavetable sample wdith.')
         parser.add_argument('--lowestNote', type=int, default=36,
                     help='Lowest MIDI note to be played (for FFT band-limit).')
+        parser.add_argument('--gainDb', type=float, default=0.0,
+                    help='Sample gain in dB (e.g. -6.0, default 0 dB)')
         parser.add_argument('--spectrumPdf', type=str, default='',
                     help='Output spectrum comparison chart to PDF file.')
         parser.add_argument('--padding', default=False, action='store_true',
@@ -411,8 +538,6 @@ if __name__ == "__main__":
             attackOrig = attackSamples.copy()
             loopOrig   = loopSamples.copy()
 
-            np.concatenate((attackSamples, loopSamples))
-
             samples = bandlimit_by_lowest_note(
                 np.concatenate((attackSamples, loopSamples)),
                 args.outSampleRate,
@@ -423,13 +548,49 @@ if __name__ == "__main__":
             attackSamples = samples[0:len(attackSamples)]
             loopSamples   = samples[len(attackSamples):]
 
+            # --- Loop error BEFORE fix ---
+            offsets_before, errors_before = compute_loop_error_curve(
+                attackSamples,
+                loopSamples,
+                search_window=256,
+                match_len=8,
+                slope_weight=0.5
+            )
 
+            attackFixed, loopFixed = auto_fix_loop_point(
+                attackSamples,
+                loopSamples,
+                search_window=256,
+                match_len=8,
+                slope_weight=0.5
+            )
+
+            offsets_after, errors_after = compute_loop_error_curve(
+                attackFixed,
+                loopFixed,
+                search_window=256,
+                match_len=8,
+                slope_weight=0.5
+            )
+
+            attackSamples = attackFixed
+            loopSamples   = loopFixed
+
+            # --- Apply user gain ---
+            if args.gainDb != 0.0:
+                print(f"Applying sample gain: {args.gainDb:.2f} dB")
+
+                attackSamples = apply_gain_db(
+                    attackSamples, args.gainDb, args.outSampleWidth)
+
+                loopSamples = apply_gain_db(
+                    loopSamples, args.gainDb, args.outSampleWidth)
+                
             pdf = None
             if args.spectrumPdf:
                 pdf = PdfPages(args.spectrumPdf)
-                if pdf is not None:
-                    nyquist = args.outSampleRate * 0.5
-                    f_max = nyquist * (lowestFreq / sampleFreqEst)
+                nyquist = args.outSampleRate * 0.5
+                f_max = nyquist * (lowestFreq / sampleFreqEst)
                 plot_spectrum_to_pdf(
                     pdf,
                     np.concatenate((attackOrig, loopOrig)),
@@ -438,8 +599,6 @@ if __name__ == "__main__":
                     title=f"{sampleName} (Attack + Loop) Spectrum",
                     f_max=f_max
                 )
-
-               
 
                 plot_time_domain_to_pdf(
                     pdf,
@@ -450,6 +609,25 @@ if __name__ == "__main__":
                     time_ms=1000.0
                 )
 
+                best_offset = offsets_before[np.argmin(errors_before)]
+
+                plot_loop_error_curve_to_pdf(
+                    pdf,
+                    offsets_before,
+                    errors_before,
+                    best_offset,
+                    title=f"{sampleName} Loop Error (Before Fix)"
+                )
+
+                best_offset_after = offsets_after[np.argmin(errors_after)]
+
+                plot_loop_error_curve_to_pdf(
+                    pdf,
+                    offsets_after,
+                    errors_after,
+                    best_offset_after,
+                    title=f"{sampleName} Loop Error (After Fix)"
+                )
 
             sampleFreqFromSf2 = noteToFreq(sampleMidiNote)
 

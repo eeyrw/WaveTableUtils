@@ -1,0 +1,10 @@
+* text=auto
+*.template text
+*.py text
+*.c text
+*.h text
+*.inc text
+*.txt text
+*.md text
+*.sf2 binary
+*.wav binary
